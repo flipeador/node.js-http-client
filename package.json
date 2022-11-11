@@ -1,0 +1,26 @@
+{
+  "name": "@flipeador/node.js-http-client",
+  "description": "Simple lightweight Node.js HTTP client.",
+  "version": "1.0.0",
+  "keywords": [
+    "javascript",
+    "node-js",
+    "async-await",
+    "http-client",
+    "http-request"
+  ],
+  "license": "gpl-3.0",
+  "main": "request.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\""
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/flipeador/node.js-http-client.git"
+  },
+  "author": "Flipeador (https://github.com/flipeador)",
+  "bugs": {
+    "url": "https://github.com/flipeador/node.js-http-client/issues"
+  },
+  "homepage": "https://github.com/flipeador/node.js-http-client#readme"
+}
