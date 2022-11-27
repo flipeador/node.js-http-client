@@ -9,13 +9,19 @@ Simple lightweight Node.js HTTP client.
 
 HTTP test web server: <https://httpbin.org/>.
 
+## Installation
+
+```bash
+npm install https://github.com/flipeador/node.js-http-client
+```
+
 ## Examples
 
 <details>
 <summary><h5>GET Request.</h5></summary>
 
 ```js
-const { Request } = require('./request.js');
+const { Request } = require('@flipeador/node.js-http-client');
 
 (async () => {
     const request = new Request('https://httpbin.org/get');
@@ -30,7 +36,7 @@ const { Request } = require('./request.js');
 <summary><h5>POST Request.</h5></summary>
 
 ```js
-const { Request } = require('./request.js');
+const { Request } = require('@flipeador/node.js-http-client');
 
 (async () => {
     const request = new Request('https://httpbin.org/post')
@@ -46,7 +52,7 @@ const { Request } = require('./request.js');
 <summary><h5>URL Forwarding.</h5></summary>
 
 ```js
-const { Request } = require('./request.js');
+const { Request } = require('@flipeador/node.js-http-client');
 
 (async () => {
     const request = new Request('https://httpbin.org/redirect/1', {
@@ -64,7 +70,7 @@ const { Request } = require('./request.js');
 
 ```js
 // client.js
-const { Request } = require('./request.js');
+const { Request } = require('@flipeador/node.js-http-client');
 
 (async () => {
     const request = new Request('http://localhost:8080', {
@@ -78,7 +84,7 @@ const { Request } = require('./request.js');
 ```js
 // server.js
 const http = require('node:http');
-const { gzip } = require('./request.js');
+const { gzip } = require('@flipeador/node.js-http-client');
 
 const server = http.createServer(async (request, response) => {
     console.log(request.method, request.headers);
