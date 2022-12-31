@@ -66,6 +66,37 @@ const { Request } = require('@flipeador/node.js-http-client');
 </details>
 
 <details>
+<summary><h5>Download a file.</h5></summary>
+
+```js
+const fs = require('node:fs');
+const { Buffer } = require('node:buffer');
+const { Request } = require('@flipeador/node.js-http-client');
+
+(async () => {
+    let current = 0;
+    const stream = fs.createWriteStream('file.ext');
+
+    const request = new Request('https://www.example.com/file.ext');
+
+    await request.send((message, chunk) => {
+        current += Buffer.byteLength(chunk);
+        const total = message.response.headers['content-length'];
+        if (total) {
+            const percent = Math.round((current / total) * 100);
+            console.log(`${current} of ${total} (${percent}%)`);
+        } else
+            console.log(`${current} bytes`);
+        stream.write(chunk);
+    });
+
+    stream.close(() => console.log('Done!'));
+})();
+```
+
+</details>
+
+<details>
 <summary><h5>Data compression between client and server.</h5></summary>
 
 ```js

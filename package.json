@@ -1,7 +1,7 @@
 {
   "name": "@flipeador/node.js-http-client",
   "description": "Simple lightweight Node.js HTTP client.",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "keywords": [
     "javascript",
     "node-js",
@@ -22,5 +22,8 @@
   "bugs": {
     "url": "https://github.com/flipeador/node.js-http-client/issues"
   },
-  "homepage": "https://github.com/flipeador/node.js-http-client#readme"
+  "homepage": "https://github.com/flipeador/node.js-http-client#readme",
+  "engines": {
+    "node": ">=16.9.0"
+  }
 }

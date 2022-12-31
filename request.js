@@ -1,11 +1,11 @@
-﻿'use strict';
+'use strict';
 
-const zlib = require('node:zlib');
 const util = require('node:util');
+const zlib = require('node:zlib');
 const http = require('node:http');
 const https = require('node:https');
-const { URL, URLSearchParams } = require('node:url');
 const { Buffer } = require('node:buffer');
+const { URL, URLSearchParams } = require('node:url');
 
 const gzip = util.promisify(zlib.gzip);
 const gunzip = util.promisify(zlib.gunzip);
@@ -14,28 +14,34 @@ const inflate = util.promisify(zlib.inflate);
 const brotliCompress = util.promisify(zlib.brotliCompress);
 const brotliDecompress = util.promisify(zlib.brotliDecompress);
 
-class RequestError extends Error { }
+class RequestError extends Error {
+    constructor(message, ...args) {
+        if (typeof(message) === 'object')
+            super(util.format(args.shift(), ...args.map(x => util.inspect(x))), message);
+        else super(util.format(message, ...args.map(x => util.inspect(x))));
+    }
 
-class RequestTimeout extends RequestError
-{
-    constructor(timeout)
-    {
-        super(`Request timed out after ${timeout} ms`);
+    static wrap(cause, message, ...args) {
+        if (cause instanceof this) return cause;
+        return new this({ cause }, message, ...args);
     }
 }
 
-class RequestAborted extends RequestError
-{
-    constructor()
-    {
+class RequestTimeout extends RequestError {
+    constructor(timeout) {
+        super('Request timed out after %s ms', timeout);
+    }
+}
+
+class RequestAborted extends RequestError {
+    constructor(data) {
         super('The connection was terminated while the message was still being sent');
+        Object.assign(this, data ?? {});
     }
 }
 
-class RequestStatus extends RequestError
-{
-    constructor(code)
-    {
+class RequestStatus extends RequestError {
+    constructor(code) {
         super(http.STATUS_CODES[code] ?? `Error #${code}`);
         this.code = code;
     }
@@ -43,7 +49,7 @@ class RequestStatus extends RequestError
 
 /**
  * Decompress a chunk of data.
- * @param chunk Chunk of data.
+ * @param {Buffer} chunk Chunk of data.
  * @param {String[]?} encodings Compression: `gzip` | `deflate` | `br`.
  * @reference https://developer.mozilla.org/docs/Web/HTTP/Headers/Content-Encoding
  */
@@ -227,7 +233,7 @@ class Request
      * @param {Object} options Options.
      * @param {String} options.method Request method. Defaults to `GET`.
      * @param {Number} options.timeout Request timeout, in milliseconds.
-     * @param {Boolean} options.followRedirects Whether to follow URL forwarding.
+     * @param {Boolean} options.followRedirects Whether to allow URL forwarding.
      * @param {Boolean} options.acceptEncoding Whether compressed data is accepted.
      */
     constructor(url, options)
@@ -307,68 +313,77 @@ class Request
 
     /**
      * Send the request to the web server.
-     * @return {Promise<Message>} Returns a `Message` object.
+     * @param {Function?} callback Incoming data handler.
+     * @return {Promise<Message>} Returns a {@link Message} object.
      */
-    async send()
+    async send(callback)
     {
-        return await new Promise((resolve, reject) => {
-            this.options.path = `${this.url.pathname}${this.url.search}`;
-            if (!this.options.method) this.options.method = 'GET';
+        try {
+            return await new Promise((resolve, reject) => {
+                this.options.path = `${this.url.pathname}${this.url.search}`;
+                if (!this.options.method) this.options.method = 'GET';
 
-            const callback = async (response) => {
-                const message = new Message(response);
+                /**
+                 * @param {http.IncomingMessage} response
+                 */
+                const _callback = async (response) => {
+                    const message = new Message(response);
 
-                response.once('aborted', () => reject(new RequestAborted()));
-                response.once('error', reject);
+                    response.once('error', reject);
 
-                if (this.followRedirects && message.redirection())
-                {
-                    try {
-                        this.url = new URL(response.headers.location, this.url);
-                        return response.destroy(resolve(await this.send()));
-                    } catch (error) {
-                        return response.destroy(error);
+                    if (this.followRedirects && message.redirection())
+                    {
+                        try {
+                            this.url = new URL(response.headers.location, this.url);
+                            return response.destroy(resolve(await this.send()));
+                        } catch (error) {
+                            return response.destroy(error);
+                        }
                     }
-                }
 
-                if (!message.success())
-                    return response.destroy(new RequestStatus(message.status()));
+                    if (!message.success())
+                        return response.destroy(new RequestStatus(message.status()));
 
-                let promise = Promise.resolve();
+                    let promise = Promise.resolve();
 
-                response.on('data', (chunk) => {
-                    promise = promise.then(async () => {
-                        message.concat(await decompress(chunk, message.encodings));
-                    }).catch((error) => {
-                        response.destroy(reject(error));
+                    response.on('data', (chunk) => {
+                        const { destroyed } = response;
+                        promise = promise.then(
+                            async () => {
+                                if (destroyed) return;
+                                if (callback) await callback.call(this, message, chunk);
+                                else message.concat(await decompress(chunk, message.encodings));
+                            },
+                            error => response.destroy(error)
+                        );
                     });
+
+                    response.once('end', () => {
+                        if (response.complete)
+                            promise.then(() => resolve(message));
+                        else reject(new RequestAborted({ message }));
+                    });
+                };
+
+                let request;
+                if (this.url.protocol === 'http:')
+                    request = http.request(this.url, this.options, _callback);
+                else if (this.url.protocol === 'https:')
+                    request = https.request(this.url, this.options, _callback);
+                else throw new RequestError('Invalid URL protocol: %s', this.url.protocol);
+
+                request.once('error', reject);
+
+                if (this.timeout) request.setTimeout(this.timeout, () => {
+                    reject(new RequestTimeout(this.timeout));
+                    request.destroy();
                 });
 
-                response.once('end', () => {
-                    promise = promise.then(async () => {
-                        if (!response.complete)
-                            reject(new RequestAborted());
-                        else resolve(message);
-                    });
-                });
-            };
-
-            let request;
-            if (this.url.protocol === 'http:')
-                request = http.request(this.url, this.options, callback)
-            else if (this.url.protocol === 'https:')
-                request = https.request(this.url, this.options, callback);
-            else throw new RequestError(`Invalid URL protocol: ${this.url.protocol}`);
-
-            request.once('error', reject);
-
-            if (this.timeout) request.setTimeout(this.timeout, () => {
-                reject(new RequestTimeout(this.timeout));
-                request.destroy();
+                request.end(this.content?.data);
             });
-
-            request.end(this.content?.data);
-        });
+        } catch (error) {
+            throw RequestError.wrap(error, '%s', this);
+        }
     }
 }
 
