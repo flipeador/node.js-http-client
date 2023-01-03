@@ -74,8 +74,8 @@ const { Buffer } = require('node:buffer');
 const { Request } = require('@flipeador/node.js-http-client');
 
 (async () => {
-    let current = 0;
     const stream = fs.createWriteStream('file.ext');
+    let current = 0;
 
     const request = new Request('https://www.example.com/file.ext');
 
@@ -87,7 +87,8 @@ const { Request } = require('@flipeador/node.js-http-client');
             console.log(`${current} of ${total} (${percent}%)`);
         } else
             console.log(`${current} bytes`);
-        stream.write(chunk);
+        if (!stream.write(chunk))
+            return new Promise(resolve => stream.once('drain', resolve));
     });
 
     stream.close(() => console.log('Done!'));
