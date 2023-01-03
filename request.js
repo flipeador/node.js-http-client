@@ -307,7 +307,7 @@ class Request
         this.content = parseMessageContent(data, type);
         this.setHeader('content-type', this.content.type);
         this.setHeader('content-length', this.content.size);
-        if (!this.options.method) this.options.method = 'POST';
+        this.options.method ??= 'POST';
         return this;
     }
 
@@ -320,8 +320,8 @@ class Request
     {
         try {
             return await new Promise((resolve, reject) => {
+                this.options.method ??= 'GET';
                 this.options.path = `${this.url.pathname}${this.url.search}`;
-                if (!this.options.method) this.options.method = 'GET';
 
                 /**
                  * @param {http.IncomingMessage} response
@@ -329,7 +329,9 @@ class Request
                 const _callback = async (response) => {
                     const message = new Message(response);
 
-                    response.once('error', reject);
+                    response.once('error', error => {
+                        message.invalid = !reject(error);
+                    });
 
                     if (this.followRedirects && message.redirection())
                     {
@@ -347,21 +349,21 @@ class Request
                     let promise = Promise.resolve();
 
                     response.on('data', (chunk) => {
-                        const { destroyed } = response;
                         promise = promise.then(
                             async () => {
-                                if (destroyed) return;
-                                if (callback) await callback.call(this, message, chunk);
-                                else message.concat(await decompress(chunk, message.encodings));
+                                if (message.invalid) return;
+                                if (callback) return callback.call(this, message, chunk);
+                                message.concat(await decompress(chunk, message.encodings));
                             },
                             error => response.destroy(error)
                         );
                     });
 
                     response.once('end', () => {
-                        if (response.complete)
-                            promise.then(() => resolve(message));
-                        else reject(new RequestAborted({ message }));
+                        message.invalid ??= !response.complete;
+                        if (message.invalid)
+                            reject(new RequestAborted({ message }));
+                        else promise.then(() => resolve(message));
                     });
                 };
 
