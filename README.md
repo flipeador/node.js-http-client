@@ -77,7 +77,10 @@ const { Request } = require('@flipeador/node.js-http-client');
     const stream = fs.createWriteStream('file.ext');
     let current = 0;
 
-    const request = new Request('https://www.example.com/file.ext');
+    const request = new Request('https://www.example.com/file.ext', {
+        // Number of bytes to read when receiving data.
+        chunkSize: 100000
+    });
 
     await request.send((message, chunk) => {
         current += Buffer.byteLength(chunk);

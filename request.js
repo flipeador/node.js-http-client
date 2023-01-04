@@ -235,11 +235,13 @@ class Request
      * @param {Number} options.timeout Request timeout, in milliseconds.
      * @param {Boolean} options.followRedirects Whether to allow URL forwarding.
      * @param {Boolean} options.acceptEncoding Whether compressed data is accepted.
+     * @param {Number} options.chunkSize Number of bytes to read when receiving data.
      */
     constructor(url, options)
     {
         this.url = url instanceof URL ? url : new URL(url);
         this.followRedirects = !!options?.followRedirects;
+        this.chunkSize = options?.chunkSize;
         if (options?.acceptEncoding)
             this.setHeader('accept-encoding', 'gzip, deflate, br');
         this.setTimeout(options?.timeout);
@@ -333,8 +335,7 @@ class Request
                         message.invalid = !reject(error);
                     });
 
-                    if (this.followRedirects && message.redirection())
-                    {
+                    if (this.followRedirects && message.redirection()) {
                         try {
                             this.url = new URL(response.headers.location, this.url);
                             return response.destroy(resolve(await this.send()));
@@ -348,15 +349,14 @@ class Request
 
                     let promise = Promise.resolve();
 
-                    response.on('data', (chunk) => {
-                        promise = promise.then(
-                            async () => {
-                                if (message.invalid) return;
-                                if (callback) return callback.call(this, message, chunk);
-                                message.concat(await decompress(chunk, message.encodings));
-                            },
-                            error => response.destroy(error)
-                        );
+                    response.on('readable', () => {
+                        promise = promise.then(async () => {
+                            let chunk;
+                            while (!message.invalid && (chunk = response.read(this.chunkSize))) {
+                                if (callback) await callback.call(this, message, chunk);
+                                else message.concat(await decompress(chunk, message.encodings));
+                            }
+                        }).catch(error => response.destroy(error));
                     });
 
                     response.once('end', () => {
