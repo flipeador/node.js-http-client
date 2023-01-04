@@ -30,6 +30,17 @@ const { Request } = require('@flipeador/node.js-http-client');
 })();
 ```
 
+```js
+const { Request } = require('@flipeador/node.js-http-client');
+
+(async () => {
+    const request = new Request('https://complimentr.com/api');
+    const response = await request.send();
+    const { compliment } = response.json();
+    console.log(compliment.trim());
+})();
+```
+
 </details>
 
 <details>
